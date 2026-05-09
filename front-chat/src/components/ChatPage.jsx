@@ -21,6 +21,14 @@ const formatFileSize = (size) => {
 
 const getAvatarLabel = (name = "U") => name.trim().charAt(0).toUpperCase() || "U";
 
+const ensureHttps = (url) => {
+  if (!url) return url;
+  if (url.startsWith("http://")) {
+    return url.replace("http://", "https://");
+  }
+  return url;
+};
+
 const ChatPage = () => {
   const {
     roomId,
@@ -717,7 +725,7 @@ const ChatPage = () => {
 
   const handleDownload = async (fileUrl, fileName) => {
     try {
-      const response = await fetch(fileUrl);
+      const response = await fetch(ensureHttps(fileUrl));
       if (!response.ok) {
         throw new Error(`Download failed: ${response.statusText}`);
       }
@@ -741,6 +749,7 @@ const ChatPage = () => {
     const messageType = message.messageType || "TEXT";
 
     if (messageType === "IMAGE" && message.fileData) {
+      const secureUrl = ensureHttps(message.fileData);
       return (
         <div className="space-y-2">
           {message.content ? (
@@ -748,12 +757,12 @@ const ChatPage = () => {
           ) : null}
           <img
             className="max-h-64 w-full rounded-lg object-cover cursor-pointer hover:opacity-90 transition"
-            src={message.fileData}
+            src={secureUrl}
             alt={message.fileName || "shared image"}
-            onClick={() => window.open(message.fileData, "_blank")}
+            onClick={() => window.open(secureUrl, "_blank")}
           />
           <button
-            onClick={() => handleDownload(message.fileData, message.fileName || "image.jpg")}
+            onClick={() => handleDownload(secureUrl, message.fileName || "image.jpg")}
             className="w-full px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold transition"
           >
             ⬇️ Download Image
@@ -763,6 +772,7 @@ const ChatPage = () => {
     }
 
     if (messageType === "VIDEO" && message.fileData) {
+      const secureUrl = ensureHttps(message.fileData);
       return (
         <div className="space-y-2">
           {message.content ? (
@@ -771,10 +781,10 @@ const ChatPage = () => {
           <video
             className="max-h-64 w-full rounded-lg object-cover"
             controls
-            src={message.fileData}
+            src={secureUrl}
           />
           <button
-            onClick={() => handleDownload(message.fileData, message.fileName || "video.mp4")}
+            onClick={() => handleDownload(secureUrl, message.fileName || "video.mp4")}
             className="w-full px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold transition"
           >
             ⬇️ Download Video
@@ -784,13 +794,14 @@ const ChatPage = () => {
     }
 
     if (messageType === "FILE" && message.fileData) {
+      const secureUrl = ensureHttps(message.fileData);
       return (
         <div className="space-y-2">
           {message.content ? (
             <p className="whitespace-pre-wrap break-words">{message.content}</p>
           ) : null}
           <button
-            onClick={() => handleDownload(message.fileData, message.fileName || "attachment")}
+            onClick={() => handleDownload(secureUrl, message.fileName || "attachment")}
             className="w-full rounded-lg bg-blue-600 hover:bg-blue-700 px-3 py-2 text-sm text-white font-semibold break-all transition"
           >
             📎 {message.fileName || "Download File"}
@@ -803,14 +814,15 @@ const ChatPage = () => {
     }
 
     if (messageType === "VOICE" && message.fileData) {
+      const secureUrl = ensureHttps(message.fileData);
       return (
         <div className="space-y-2">
           {message.content ? (
             <p className="whitespace-pre-wrap break-words">{message.content}</p>
           ) : null}
-          <audio controls src={message.fileData} className="w-full" />
+          <audio controls src={secureUrl} className="w-full" />
           <button
-            onClick={() => handleDownload(message.fileData, message.fileName || "audio.webm")}
+            onClick={() => handleDownload(secureUrl, message.fileName || "audio.webm")}
             className="w-full px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold transition"
           >
             ⬇️ Download Audio
