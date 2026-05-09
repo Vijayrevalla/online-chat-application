@@ -62,7 +62,12 @@ public class FileUploadController {
             String scheme = request.getScheme();
             String serverName = request.getServerName();
             int port = request.getServerPort();
-            String fileUrl = String.format("%s://%s:%d/uploads/%s", scheme, serverName, port, generatedFilename);
+            String fileUrl;
+            if (serverName != null && serverName.contains("onrender.com")) {
+                fileUrl = String.format("https://%s/uploads/%s", serverName, generatedFilename);
+            } else {
+                fileUrl = String.format("%s://%s:%d/uploads/%s", scheme, serverName, port, generatedFilename);
+            }
             
             Map<String, String> response = new HashMap<>();
             response.put("url", fileUrl);

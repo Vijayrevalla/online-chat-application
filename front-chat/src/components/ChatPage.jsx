@@ -23,10 +23,14 @@ const getAvatarLabel = (name = "U") => name.trim().charAt(0).toUpperCase() || "U
 
 const ensureHttps = (url) => {
   if (!url) return url;
-  if (url.startsWith("http://")) {
-    return url.replace("http://", "https://");
+  let sanitized = url;
+  if (sanitized.startsWith("http://")) {
+    sanitized = sanitized.replace("http://", "https://");
   }
-  return url;
+  if (sanitized.includes("onrender.com")) {
+    sanitized = sanitized.replace(/onrender\.com:\d+/, "onrender.com");
+  }
+  return sanitized;
 };
 
 const ChatPage = () => {
