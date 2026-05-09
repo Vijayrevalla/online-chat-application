@@ -838,104 +838,130 @@ const ChatPage = () => {
   }
 
   return (
-    <div className="">
-      <header className="dark:border-gray-700 fixed w-full dark:bg-gray-900 py-5 shadow flex justify-around items-center">
-        <div>
-          <h1 className="text-xl font-semibold">
-            Room : <span>{roomId}</span>
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans">
+      {/* Premium Sticky Header */}
+      <header className="sticky top-0 z-40 w-full border-b border-white/10 bg-slate-900/80 backdrop-blur-md px-4 py-4 md:py-5 shadow-lg flex flex-col md:flex-row gap-3 justify-between items-center">
+        <div className="flex items-center gap-2">
+          <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+          <h1 className="text-lg md:text-xl font-bold tracking-tight">
+            Room: <span className="bg-gradient-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent font-extrabold">{roomId}</span>
           </h1>
         </div>
 
-        <div>
-          <h1 className="text-xl font-semibold">
-            User : <span>{currentUser}</span>
-          </h1>
-        </div>
+        <div className="flex flex-wrap items-center gap-3 md:gap-6">
+          <div className="bg-white/5 border border-white/10 px-3 py-1 rounded-full text-xs md:text-sm flex items-center gap-1.5">
+            <span className="text-slate-400">User:</span>
+            <span className="font-semibold text-blue-300">{currentUser}</span>
+          </div>
 
-        <div>
-          <p className="text-sm">
-            Status : 
+          <div className="text-xs md:text-sm flex items-center gap-1.5">
+            <span className="text-slate-400">Status:</span>
             <span
-              className={`font-semibold ${connectionStatus === "CONNECTED" ? "text-green-300" : connectionStatus === "CONNECTING" ? "text-yellow-300" : "text-red-300"}`}
+              className={`font-semibold px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider ${
+                connectionStatus === "CONNECTED"
+                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                  : connectionStatus === "CONNECTING"
+                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                  : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+              }`}
             >
               {connectionStatus}
             </span>
-          </p>
-          {renderOnlineUsers()}
+          </div>
         </div>
 
-        <div>
-          <button
-            onClick={handleLogout}
-            className="dark:bg-red-500 dark:hover:bg-red-700 px-3 py-2 rounded-full"
-          >
-            Leave Room
-          </button>
-        </div>
+        <button
+          onClick={handleLogout}
+          className="w-full md:w-auto px-4 py-2 bg-rose-500/10 hover:bg-rose-600 border border-rose-500/20 hover:border-transparent text-rose-200 hover:text-white rounded-xl text-sm font-semibold transition-all duration-300 active:scale-95"
+        >
+          Leave Room
+        </button>
       </header>
 
-      <video
-        ref={cameraCaptureVideoRef}
-        style={{ display: "none" }}
-        autoPlay
-        muted
-        playsInline
-      />
-
+      {/* Main Chat Box */}
       <main
         ref={chatBoxRef}
-        className="py-20 px-4 md:px-10 w-full md:w-2/3 dark:bg-slate-600 mx-auto h-screen overflow-auto"
+        className="flex-1 overflow-y-auto px-4 py-6 md:px-8 space-y-4 max-w-4xl mx-auto w-full pb-28"
       >
         {messages.map((message, index) => (
           <div
             key={`${message.timeStamp || "message"}-${index}`}
-            className={`flex ${
-              message.sender === currentUser ? "justify-end" : "justify-start"
-            }`}
+            className={`flex ${message.sender === currentUser ? "justify-end" : "justify-start"} animate-fade-in`}
           >
             <div
-              className={`my-2 ${
-                message.sender === currentUser ? "bg-green-800" : "bg-gray-800"
-              } p-3 max-w-xs md:max-w-md rounded-xl shadow`}
+              className={`flex items-start gap-3 max-w-[85%] md:max-w-[70%] p-3.5 rounded-2xl shadow-xl transition-all ${
+                message.sender === currentUser
+                  ? "bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-tr-none"
+                  : "bg-slate-900 border border-white/5 text-slate-100 rounded-tl-none"
+              }`}
             >
-              <div className="flex flex-row gap-3 items-start">
-                <div className="h-10 w-10 rounded-full bg-slate-200 text-slate-900 flex items-center justify-center font-bold shrink-0">
-                  {getAvatarLabel(message.sender)}
-                </div>
-                <div className="flex flex-col gap-1 min-w-0">
-                  <p className="text-sm font-bold">{message.sender}</p>
-                  {renderMessageContent(message)}
-                  <p className="text-xs text-gray-400">{timeAgo(message.timeStamp)}</p>
-                </div>
+              <div className="h-9 w-9 rounded-full bg-slate-800 text-slate-200 border border-white/10 flex items-center justify-center font-bold text-sm shrink-0">
+                {getAvatarLabel(message.sender)}
+              </div>
+              <div className="flex flex-col gap-1 min-w-0">
+                <span className="text-xs font-semibold text-blue-300">{message.sender}</span>
+                <div className="text-sm leading-relaxed">{renderMessageContent(message)}</div>
+                <span className="text-[10px] text-slate-400 mt-1 self-end">{timeAgo(message.timeStamp)}</span>
               </div>
             </div>
           </div>
         ))}
       </main>
 
+      {/* Camera Preview Modal */}
+      {isCameraOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-white/10 p-5 rounded-2xl w-full max-w-md shadow-2xl relative space-y-4 animate-slide-up">
+            <button
+              onClick={closeCamera}
+              className="absolute top-4 right-4 h-8 w-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition"
+            >
+              <MdClose size={18} />
+            </button>
+            <h3 className="text-lg font-bold text-blue-400">Capture Picture</h3>
+            <div className="aspect-video bg-black rounded-xl overflow-hidden relative border border-white/5">
+              <video
+                ref={cameraLiveRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover transform -scale-x-100"
+              />
+            </div>
+            <button
+              onClick={capturePhotoFromPreview}
+              className="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold rounded-xl transition"
+            >
+              📸 Capture Photo
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Video Call Overlay */}
       {isVideoCallActive ? (
-        <div className="fixed top-20 right-4 bg-gray-900/90 rounded-lg p-3 shadow-lg z-50">
-          <h2 className="text-sm font-semibold mb-2 text-white">Video Call</h2>
+        <div className="fixed bottom-24 right-4 bg-slate-900/95 border border-white/10 rounded-2xl p-4 shadow-2xl z-40 max-w-xs animate-slide-up">
+          <h2 className="text-xs font-bold uppercase tracking-wider mb-2 text-slate-400">Video Call</h2>
           <div className="flex gap-2">
             <video
               ref={cameraVideoRef}
               autoPlay
               muted
-              className="w-32 h-24 bg-black rounded"
+              className="w-24 h-18 bg-black rounded-lg border border-white/5"
             />
             {remoteStream ? (
               <video
                 ref={remoteVideoRef}
                 autoPlay
-                className="w-32 h-24 bg-black rounded"
+                className="w-24 h-18 bg-black rounded-lg border border-white/5"
               />
             ) : (
-              <div className="w-32 h-24 bg-gray-800 rounded flex items-center justify-center text-xs text-white">Waiting for peer</div>
+              <div className="w-24 h-18 bg-slate-800 rounded-lg flex items-center justify-center text-[10px] text-slate-400">Waiting...</div>
             )}
           </div>
           <button
             onClick={endVideoCall}
-            className="mt-2 px-3 py-1 bg-red-600 text-white rounded"
+            className="mt-3 w-full py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition"
           >
             End Call
           </button>
@@ -944,8 +970,9 @@ const ChatPage = () => {
 
       {renderTypingIndicator()}
 
-      <div className="fixed bottom-4 w-full px-2 md:px-0">
-        <div className="relative pr-3 md:pr-6 gap-3 flex items-center justify-between rounded-2xl w-full md:w-1/2 mx-auto dark:bg-gray-900 min-h-16 py-2">
+      {/* Floating Sticky Input Bar */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 md:p-6 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent">
+        <div className="max-w-4xl mx-auto bg-slate-900/90 border border-white/10 rounded-2xl p-2.5 backdrop-blur-md shadow-2xl flex flex-col gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -954,19 +981,19 @@ const ChatPage = () => {
             accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip,.rar,.csv,.xlsx,.xls"
           />
 
-          <div className="flex-1 px-3 md:px-5">
-            {selectedFile ? (
-              <div className="mb-2 rounded-lg bg-gray-800 px-3 py-2 text-sm flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{selectedFile.name}</p>
-                  <p className="text-xs text-gray-400">{formatFileSize(selectedFile.size)}</p>
-                </div>
-                <button onClick={clearSelectedFile} type="button">
-                  <MdClose size={18} />
-                </button>
+          {selectedFile ? (
+            <div className="mx-2 p-2 rounded-xl bg-white/5 border border-white/5 text-xs flex items-center justify-between gap-3 animate-fade-in">
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-slate-200">{selectedFile.name}</p>
+                <p className="text-[10px] text-slate-400">{formatFileSize(selectedFile.size)}</p>
               </div>
-            ) : null}
+              <button onClick={clearSelectedFile} type="button" className="text-slate-400 hover:text-white">
+                <MdClose size={16} />
+              </button>
+            </div>
+          ) : null}
 
+          <div className="flex items-center gap-2">
             <input
               value={input}
               onChange={(e) => {
@@ -980,65 +1007,54 @@ const ChatPage = () => {
               }}
               type="text"
               placeholder="Type your message here..."
-              className="w-full dark:border-gray-600 dark:bg-gray-800 px-5 py-2 rounded-full h-full focus:outline-none"
+              className="flex-1 bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
             />
-          </div>
 
-          <div className="flex gap-1 relative">
-            <button
-              type="button"
-              onClick={captureCameraPhoto}
-              className="dark:bg-cyan-600 h-10 w-10 flex justify-center items-center rounded-full"
-              title="Capture photo"
-            >
-              📸
-            </button>
-            <button
-              type="button"
-              onClick={startVideoCall}
-              className={`h-10 w-10 flex justify-center items-center rounded-full ${isVideoCallActive ? "bg-red-600" : "bg-blue-600"}`}
-              title="Start video call"
-            >
-              📹
-            </button>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="dark:bg-purple-600 h-10 w-10 flex justify-center items-center rounded-full"
-              title="Attach file"
-            >
-              <MdAttachFile size={20} />
-            </button>
-            <button
-              type="button"
-              onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-              className={`h-10 w-10 flex justify-center items-center rounded-full ${isRecording ? "bg-red-500" : "bg-yellow-500"}`}
-              title="Voice message record"
-            >
-              🎤
-            </button>
-            <button
-              type="button"
-              onClick={sendMessage}
-              className="dark:bg-green-600 h-10 w-10 flex justify-center items-center rounded-full"
-            >
-              <MdSend size={20} />
-            </button>
-
-            {showEmojiPicker ? (
-              <div className="absolute bottom-14 right-0 rounded-xl bg-gray-800 p-3 shadow-lg grid grid-cols-5 gap-2 z-10">
-                {EMOJI_OPTIONS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => handleEmojiSelect(emoji)}
-                    className="text-xl hover:scale-110 transition-transform"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            ) : null}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={openCamera}
+                className="h-10 w-10 bg-slate-800 hover:bg-slate-700 border border-white/5 text-slate-200 rounded-xl flex items-center justify-center transition active:scale-95"
+                title="Open Camera"
+              >
+                📸
+              </button>
+              <button
+                type="button"
+                onClick={startVideoCall}
+                className={`h-10 w-10 border border-white/5 rounded-xl flex items-center justify-center transition active:scale-95 ${
+                  isVideoCallActive ? "bg-rose-600 hover:bg-rose-700 text-white" : "bg-slate-800 hover:bg-slate-700 text-slate-200"
+                }`}
+                title="Start video call"
+              >
+                📹
+              </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="h-10 w-10 bg-slate-800 hover:bg-slate-700 border border-white/5 text-slate-200 rounded-xl flex items-center justify-center transition active:scale-95"
+                title="Attach file"
+              >
+                <MdAttachFile size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+                className={`h-10 w-10 border border-white/5 rounded-xl flex items-center justify-center transition active:scale-95 ${
+                  isRecording ? "bg-rose-500 text-white animate-pulse" : "bg-slate-800 hover:bg-slate-700 text-slate-200"
+                }`}
+                title="Voice message"
+              >
+                🎤
+              </button>
+              <button
+                type="button"
+                onClick={sendMessage}
+                className="h-10 w-10 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center transition active:scale-95 shadow-lg shadow-blue-500/20"
+              >
+                <MdSend size={18} />
+              </button>
+            </div>
           </div>
         </div>
       </div>
