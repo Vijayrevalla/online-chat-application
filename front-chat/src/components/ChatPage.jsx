@@ -822,6 +822,67 @@ const ChatPage = () => {
     return <p className="whitespace-pre-wrap break-words">{message.content}</p>;
   };
 
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const cameraLiveRef = useRef(null);
+
+  const openCamera = async () => {
+    if (isVideoCallActive || localStream) {
+      toast.error("Cannot capture photo while video call is active.");
+      return;
+    }
+    setIsCameraOpen(true);
+    setTimeout(async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        if (cameraLiveRef.current) {
+          cameraLiveRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.error("Failed to open camera", err);
+        toast.error("Failed to open camera. Check permissions.");
+        setIsCameraOpen(false);
+      }
+    }, 100);
+  };
+
+  const closeCamera = () => {
+    if (cameraLiveRef.current && cameraLiveRef.current.srcObject) {
+      cameraLiveRef.current.srcObject.getTracks().forEach((track) => track.stop());
+      cameraLiveRef.current.srcObject = null;
+    }
+    setIsCameraOpen(false);
+  };
+
+  const capturePhotoFromPreview = () => {
+    if (!cameraLiveRef.current) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = 640;
+    canvas.height = 480;
+    const context = canvas.getContext("2d");
+    context.drawImage(cameraLiveRef.current, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+
+    const blobBin = atob(dataUrl.split(",")[1]);
+    const array = [];
+    for (let i = 0; i < blobBin.length; i++) {
+      array.push(blobBin.charCodeAt(i));
+    }
+    const file = new File([new Uint8Array(array)], `camera-${Date.now()}.jpg`, { type: "image/jpeg" });
+
+    setSelectedFile({
+      name: file.name,
+      type: file.type,
+      dataUrl,
+      isImage: true,
+      isVideo: false,
+      size: file.size,
+      fileObj: file,
+    });
+
+    toast.success("Photo captured!");
+    closeCamera();
+  };
+
   function handleLogout() {
     if (stompClient?.active) {
       stompClient.publish({
