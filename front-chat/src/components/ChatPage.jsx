@@ -1054,28 +1054,39 @@ const ChatPage = () => {
             </div>
           ) : null}
 
-          <div className="flex items-center gap-2">
-            <input
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                notifyTyping();
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  sendMessage();
-                }
-              }}
-              type="text"
-              placeholder="Type your message here..."
-              className="flex-1 bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-            />
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+            {/* Input & Send button row (takes priority on top on mobile) */}
+            <div className="flex flex-1 items-center gap-2 order-1 md:order-2 w-full">
+              <input
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  notifyTyping();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    sendMessage();
+                  }
+                }}
+                type="text"
+                placeholder="Type your message here..."
+                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all min-w-0"
+              />
+              <button
+                type="button"
+                onClick={sendMessage}
+                className="h-11 w-11 shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center transition active:scale-95 shadow-lg shadow-blue-500/20"
+              >
+                <MdSend size={20} />
+              </button>
+            </div>
 
-            <div className="flex items-center gap-1.5">
+            {/* Utility buttons row (rendered elegantly below input on mobile, left on desktop) */}
+            <div className="flex items-center justify-between md:justify-start gap-2 order-2 md:order-1 w-full md:w-auto shrink-0">
               <button
                 type="button"
                 onClick={openCamera}
-                className="h-10 w-10 bg-slate-800 hover:bg-slate-700 border border-white/5 text-slate-200 rounded-xl flex items-center justify-center transition active:scale-95"
+                className="flex-1 md:flex-initial h-11 w-11 bg-slate-800 hover:bg-slate-700 border border-white/5 text-slate-200 rounded-xl flex items-center justify-center transition active:scale-95"
                 title="Open Camera"
               >
                 📸
@@ -1083,7 +1094,7 @@ const ChatPage = () => {
               <button
                 type="button"
                 onClick={startVideoCall}
-                className={`h-10 w-10 border border-white/5 rounded-xl flex items-center justify-center transition active:scale-95 ${
+                className={`flex-1 md:flex-initial h-11 w-11 border border-white/5 rounded-xl flex items-center justify-center transition active:scale-95 ${
                   isVideoCallActive ? "bg-rose-600 hover:bg-rose-700 text-white" : "bg-slate-800 hover:bg-slate-700 text-slate-200"
                 }`}
                 title="Start video call"
@@ -1093,27 +1104,20 @@ const ChatPage = () => {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="h-10 w-10 bg-slate-800 hover:bg-slate-700 border border-white/5 text-slate-200 rounded-xl flex items-center justify-center transition active:scale-95"
+                className="flex-1 md:flex-initial h-11 w-11 bg-slate-800 hover:bg-slate-700 border border-white/5 text-slate-200 rounded-xl flex items-center justify-center transition active:scale-95"
                 title="Attach file"
               >
-                <MdAttachFile size={18} />
+                <MdAttachFile size={20} />
               </button>
               <button
                 type="button"
                 onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                className={`h-10 w-10 border border-white/5 rounded-xl flex items-center justify-center transition active:scale-95 ${
+                className={`flex-1 md:flex-initial h-11 w-11 border border-white/5 rounded-xl flex items-center justify-center transition active:scale-95 ${
                   isRecording ? "bg-rose-500 text-white animate-pulse" : "bg-slate-800 hover:bg-slate-700 text-slate-200"
                 }`}
                 title="Voice message"
               >
                 🎤
-              </button>
-              <button
-                type="button"
-                onClick={sendMessage}
-                className="h-10 w-10 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center transition active:scale-95 shadow-lg shadow-blue-500/20"
-              >
-                <MdSend size={18} />
               </button>
             </div>
           </div>
