@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@CrossOrigin("*")
+@CrossOrigin(originPatterns = "*")
 @RequestMapping("/upload")
 public class FileUploadController {
 

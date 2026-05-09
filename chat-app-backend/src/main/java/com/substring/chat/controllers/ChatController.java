@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 @Controller
-@CrossOrigin
+@CrossOrigin(originPatterns = "*")
 public class ChatController {
 
 
