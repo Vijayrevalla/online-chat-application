@@ -7,3 +7,5 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Force netlify build trigger 2

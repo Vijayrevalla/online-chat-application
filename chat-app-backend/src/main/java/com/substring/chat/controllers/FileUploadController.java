@@ -43,9 +43,9 @@ public class FileUploadController {
             return ResponseEntity.badRequest().body(Map.of("error", "File is empty"));
         }
 
-        if (file.getSize() > 15L * 1024L * 1024L) {
+        if (file.getSize() > 50L * 1024L * 1024L) {
             return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
-                    .body(Map.of("error", "File too large (max 15 MB)"));
+                    .body(Map.of("error", "File too large (max 50 MB)"));
         }
 
         try {
