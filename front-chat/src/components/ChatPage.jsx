@@ -461,6 +461,19 @@ const ChatPage = () => {
       setRemoteStream(remote);
     };
 
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        stompClient.publish({
+          destination: `/app/call/${roomId}`,
+          body: JSON.stringify({
+            type: "ICE",
+            candidate: event.candidate,
+            from: currentUser,
+          }),
+        });
+      }
+    };
+
     cleanupCameraCaptureStream();
 
     let stream;
