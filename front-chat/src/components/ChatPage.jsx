@@ -63,7 +63,7 @@ const ChatPage = () => {
   const cameraCaptureVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const cameraCaptureStreamRef = useRef(null);
-  const pendingCallSignalRef = useRef(null);
+  const pendingCallSignalsRef = useRef([]);
   const chatBoxRef = useRef(null);
   const fileInputRef = useRef(null);
   const stompSubscriptionRef = useRef(null);
@@ -114,22 +114,31 @@ const ChatPage = () => {
   }, [remoteStream]);
 
   useEffect(() => {
-    if (!isStompReady() || !pendingCallSignalRef.current) {
+    if (!isStompReady() || !pendingCallSignalsRef.current || pendingCallSignalsRef.current.length === 0) {
       return;
     }
 
-    const signal = pendingCallSignalRef.current;
-    pendingCallSignalRef.current = null;
+    // Grab a snapshot and clear the buffer
+    const pendingList = [...pendingCallSignalsRef.current];
+    pendingCallSignalsRef.current = [];
 
-    try {
-      stompClient.publish({
-        destination: `/app/call/${roomId}`,
-        body: JSON.stringify(signal),
-      });
-      toast.success("Pending call signal sent after reconnect.");
-    } catch (err) {
-      console.error("Failed to send pending call signal", err);
-      toast.error("Failed to send pending call signal after reconnect.");
+    let successCount = 0;
+    pendingList.forEach((signal) => {
+      try {
+        stompClient.publish({
+          destination: `/app/call/${roomId}`,
+          body: JSON.stringify(signal),
+        });
+        successCount++;
+      } catch (err) {
+        console.error("Failed to send pending call signal", err);
+        // Put back in queue for next try
+        pendingCallSignalsRef.current.push(signal);
+      }
+    });
+
+    if (successCount > 0) {
+      toast.success(`Forwarded ${successCount} buffered call signal(s).`);
     }
   }, [isStompConnected, stompClient, roomId]);
 
@@ -143,9 +152,9 @@ const ChatPage = () => {
 
     const client = new Client({
       webSocketFactory: () => new SockJS(`${baseURL}/chat`),
-      reconnectDelay: 5000,
-      heartbeatIncoming: 4000,
-      heartbeatOutgoing: 4000,
+      reconnectDelay: 3000,
+      heartbeatIncoming: 25000,
+      heartbeatOutgoing: 25000,
       onConnect: () => {
         // Room messages
         if (stompSubscriptionRef.current) {
@@ -402,8 +411,10 @@ const ChatPage = () => {
     if (!signal) return;
 
     if (!isStompReady()) {
-      pendingCallSignalRef.current = signal;
-      toast.loading("STOMP disconnected. Call response will be sent when connected.");
+      pendingCallSignalsRef.current.push(signal);
+      if (pendingCallSignalsRef.current.length === 1) {
+        toast.loading("Chat paused. Resending call signal once reconnected.");
+      }
       return;
     }
 
@@ -414,8 +425,7 @@ const ChatPage = () => {
       });
     } catch (err) {
       console.error("Unable to publish call signal", err);
-      toast.error("Unable to publish call signal.");
-      pendingCallSignalRef.current = signal;
+      pendingCallSignalsRef.current.push(signal);
     }
   };
 
@@ -463,13 +473,10 @@ const ChatPage = () => {
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        stompClient.publish({
-          destination: `/app/call/${roomId}`,
-          body: JSON.stringify({
-            type: "ICE",
-            candidate: event.candidate,
-            from: currentUser,
-          }),
+        sendCallSignal({
+          type: "ICE",
+          candidate: event.candidate,
+          from: currentUser,
         });
       }
     };
@@ -551,13 +558,10 @@ const ChatPage = () => {
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        stompClient.publish({
-          destination: `/app/call/${roomId}`,
-          body: JSON.stringify({
-            type: "ICE",
-            candidate: event.candidate,
-            from: currentUser,
-          }),
+        sendCallSignal({
+          type: "ICE",
+          candidate: event.candidate,
+          from: currentUser,
         });
       }
     };
