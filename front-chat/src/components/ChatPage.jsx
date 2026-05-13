@@ -79,6 +79,7 @@ const ChatPage = () => {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const callPeerConnectionRef = useRef(null);
+  const pendingIceCandidatesRef = useRef([]);
   const cameraVideoRef = useRef(null);
   const cameraCaptureVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -533,8 +534,29 @@ const ChatPage = () => {
     }
   };
 
+  const flushPendingIceCandidates = async () => {
+    const pc = callPeerConnectionRef.current;
+    if (!pc || !pc.remoteDescription) return;
+    
+    const candidates = [...pendingIceCandidatesRef.current];
+    pendingIceCandidatesRef.current = [];
+    
+    for (const cand of candidates) {
+      try {
+        await pc.addIceCandidate(cand);
+      } catch (err) {
+        console.error("Failed to flush ICE candidate", err);
+      }
+    }
+  };
+
   const processIncomingCallSignal = async (signal) => {
     if (!signal || !signal.type) return;
+
+    // Ignore our own signaling messages to avoid echo-processing bugs
+    if (signal.from === currentUser) {
+      return;
+    }
 
     if (signal.type === "OFFER") {
       await initiateCallReception(signal);
@@ -543,15 +565,25 @@ const ChatPage = () => {
 
     if (signal.type === "ANSWER") {
       if (callPeerConnectionRef.current && signal.sdp) {
-        await callPeerConnectionRef.current.setRemoteDescription(signal.sdp);
+        try {
+          await callPeerConnectionRef.current.setRemoteDescription(signal.sdp);
+          await flushPendingIceCandidates();
+        } catch (err) {
+          console.error("Error setting remote description on answer", err);
+        }
       }
       return;
     }
 
     if (signal.type === "ICE") {
-      if (callPeerConnectionRef.current && signal.candidate) {
+      const pc = callPeerConnectionRef.current;
+      if (pc && signal.candidate) {
         try {
-          await callPeerConnectionRef.current.addIceCandidate(signal.candidate);
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            await pc.addIceCandidate(signal.candidate);
+          } else {
+            pendingIceCandidatesRef.current.push(signal.candidate);
+          }
         } catch (err) {
           console.error("Failed to add ICE candidate", err);
         }
@@ -565,6 +597,8 @@ const ChatPage = () => {
       toast.error("WebRTC is not supported in this browser.");
       return;
     }
+
+    pendingIceCandidatesRef.current = []; // Reset candidate queue for new call
 
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -608,14 +642,22 @@ const ChatPage = () => {
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
     setLocalStream(stream);
 
-    await pc.setRemoteDescription(signal.sdp);
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-
-    callPeerConnectionRef.current = pc;
-    setIsVideoCallActive(true);
-
-    sendCallSignal({ type: "ANSWER", sdp: pc.localDescription, from: currentUser });
+    callPeerConnectionRef.current = pc; // Must set Ref before remoteDescription to allow flushing
+    
+    try {
+      await pc.setRemoteDescription(signal.sdp);
+      await flushPendingIceCandidates();
+      
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      
+      setIsVideoCallActive(true);
+      
+      sendCallSignal({ type: "ANSWER", sdp: pc.localDescription, from: currentUser });
+    } catch (err) {
+      console.error("Error completing call handshake", err);
+      toast.error("Failed to establish secure video connection.");
+    }
   };
 
   const startVideoCall = async () => {
@@ -629,6 +671,7 @@ const ChatPage = () => {
       return;
     }
 
+    pendingIceCandidatesRef.current = []; // Reset queue for new call session
     cleanupCameraCaptureStream();
 
     const pc = new RTCPeerConnection({
