@@ -88,6 +88,17 @@ const ChatPage = () => {
   const fileInputRef = useRef(null);
   const stompSubscriptionRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const stompClientRef = useRef(null);
+  const isStompConnectedRef = useRef(false);
+  const pendingCallToastIdRef = useRef(null);
+
+  useEffect(() => {
+    stompClientRef.current = stompClient;
+  }, [stompClient]);
+
+  useEffect(() => {
+    isStompConnectedRef.current = isStompConnected;
+  }, [isStompConnected]);
 
   useEffect(() => {
     if (!connected) {
@@ -121,9 +132,10 @@ const ChatPage = () => {
   }, [messages]);
 
   const isStompReady = () => {
+    const currentClient = stompClientRef.current;
     return (
-      stompClient &&
-      (stompClient.active || stompClient.connected || isStompConnected)
+      currentClient &&
+      (currentClient.active || currentClient.connected || isStompConnectedRef.current)
     );
   };
 
@@ -145,7 +157,7 @@ const ChatPage = () => {
     let successCount = 0;
     pendingList.forEach((signal) => {
       try {
-        stompClient.publish({
+        stompClientRef.current.publish({
           destination: `/app/call/${roomId}`,
           body: JSON.stringify(signal),
         });
@@ -158,6 +170,10 @@ const ChatPage = () => {
     });
 
     if (successCount > 0) {
+      if (pendingCallToastIdRef.current) {
+        toast.dismiss(pendingCallToastIdRef.current);
+        pendingCallToastIdRef.current = null;
+      }
       toast.success(`Forwarded ${successCount} buffered call signal(s).`);
     }
   }, [isStompConnected, stompClient, roomId]);
@@ -428,7 +444,7 @@ const ChatPage = () => {
     };
 
     try {
-      stompClient.publish({
+      stompClientRef.current.publish({
         destination: `/app/sendMessage/${roomId}`,
         body: JSON.stringify(message),
       });
@@ -450,7 +466,7 @@ const ChatPage = () => {
       return;
     }
     try {
-      stompClient.publish({
+      stompClientRef.current.publish({
         destination: `/app/deleteMessage/${roomId}`,
         body: JSON.stringify({ messageId }),
       });
@@ -468,7 +484,7 @@ const ChatPage = () => {
       await clearChatApi(roomId);
       
       if (isStompReady()) {
-        stompClient.publish({
+        stompClientRef.current.publish({
           destination: `/app/clearChat/${roomId}`,
           body: JSON.stringify({ type: "CLEAR_CHAT", user: currentUser }),
         });
@@ -487,7 +503,7 @@ const ChatPage = () => {
       return;
     }
 
-    stompClient.publish({
+    stompClientRef.current.publish({
       destination: `/app/typing/${roomId}`,
       body: currentUser,
     });
@@ -499,13 +515,15 @@ const ChatPage = () => {
     if (!isStompReady()) {
       pendingCallSignalsRef.current.push(signal);
       if (pendingCallSignalsRef.current.length === 1) {
-        toast.loading("Chat paused. Resending call signal once reconnected.");
+        if (!pendingCallToastIdRef.current) {
+          pendingCallToastIdRef.current = toast.loading("Chat paused. Resending call signal once reconnected.");
+        }
       }
       return;
     }
 
     try {
-      stompClient.publish({
+      stompClientRef.current.publish({
         destination: `/app/call/${roomId}`,
         body: JSON.stringify(signal),
       });
@@ -1011,12 +1029,13 @@ const ChatPage = () => {
   };
 
   function handleLogout() {
-    if (stompClient?.active) {
-      stompClient.publish({
+    const currentClient = stompClientRef.current;
+    if (currentClient?.active) {
+      currentClient.publish({
         destination: `/app/userPresence/${roomId}`,
         body: JSON.stringify({ user: currentUser, type: "LEAVE" }),
       });
-      stompClient.deactivate();
+      currentClient.deactivate();
       setStompClient(null);
     }
     setConnected(false);
