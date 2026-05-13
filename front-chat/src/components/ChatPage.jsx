@@ -144,9 +144,13 @@ const ChatPage = () => {
   useEffect(() => {
     const video = cameraVideoRef.current;
     if (video && localStream) {
-      video.srcObject = localStream;
-      video.muted = true;
-      video.play().catch(err => console.warn("Local video play failed", err));
+      if (video.srcObject !== localStream) {
+        video.srcObject = localStream;
+        video.muted = true;
+        video.play().catch(err => {
+          if (err.name !== "AbortError") console.warn("Local video play failed", err);
+        });
+      }
     } else if (video) {
       video.srcObject = null;
     }
@@ -155,8 +159,12 @@ const ChatPage = () => {
   useEffect(() => {
     const video = remoteVideoRef.current;
     if (video && remoteStream) {
-      video.srcObject = remoteStream;
-      video.play().catch(err => console.warn("Remote video play failed", err));
+      if (video.srcObject !== remoteStream) {
+        video.srcObject = remoteStream;
+        video.play().catch(err => {
+          if (err.name !== "AbortError") console.warn("Remote video play failed", err);
+        });
+      }
     } else if (video) {
       video.srcObject = null;
     }
@@ -623,7 +631,10 @@ const ChatPage = () => {
 
     pc.ontrack = (event) => {
       const remote = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
-      setRemoteStream(remote);
+      setRemoteStream((prev) => {
+        if (prev) return prev;
+        return remote;
+      });
     };
 
     pc.onicecandidate = (event) => {
@@ -709,7 +720,10 @@ const ChatPage = () => {
 
     pc.ontrack = (event) => {
       const remote = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
-      setRemoteStream(remote);
+      setRemoteStream((prev) => {
+        if (prev) return prev;
+        return remote;
+      });
     };
 
     pc.onicecandidate = (event) => {
