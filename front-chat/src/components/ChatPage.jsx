@@ -112,6 +112,7 @@ const ChatPage = () => {
   const stompClientRef = useRef(null);
   const isStompConnectedRef = useRef(false);
   const pendingCallToastIdRef = useRef(null);
+  const lastTypingSentRef = useRef(0);
 
   useEffect(() => {
     stompClientRef.current = stompClient;
@@ -546,6 +547,14 @@ const ChatPage = () => {
     if (!isStompReady()) {
       return;
     }
+
+    const now = Date.now();
+    // Throttle WebSocket traffic to once every 2000ms to eliminate network congestion and UI lag
+    if (now - lastTypingSentRef.current < 2000) {
+      return;
+    }
+
+    lastTypingSentRef.current = now;
 
     stompClientRef.current.publish({
       destination: `/app/typing/${roomId}`,
