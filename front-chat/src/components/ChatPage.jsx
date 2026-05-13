@@ -141,8 +141,23 @@ const ChatPage = () => {
   };
 
   useEffect(() => {
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = remoteStream || null;
+    const video = cameraVideoRef.current;
+    if (video && localStream) {
+      video.srcObject = localStream;
+      video.muted = true;
+      video.play().catch(err => console.warn("Local video play failed", err));
+    } else if (video) {
+      video.srcObject = null;
+    }
+  }, [localStream]);
+
+  useEffect(() => {
+    const video = remoteVideoRef.current;
+    if (video && remoteStream) {
+      video.srcObject = remoteStream;
+      video.play().catch(err => console.warn("Remote video play failed", err));
+    } else if (video) {
+      video.srcObject = null;
     }
   }, [remoteStream]);
 
@@ -634,11 +649,7 @@ const ChatPage = () => {
       return;
     }
 
-    if (cameraVideoRef.current) {
-      cameraVideoRef.current.srcObject = stream;
-      cameraVideoRef.current.muted = true;
-      await cameraVideoRef.current.play();
-    }
+
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
     setLocalStream(stream);
 
@@ -691,11 +702,7 @@ const ChatPage = () => {
       return;
     }
 
-    if (cameraVideoRef.current) {
-      cameraVideoRef.current.srcObject = stream;
-      cameraVideoRef.current.muted = true;
-      await cameraVideoRef.current.play();
-    }
+
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
     pc.ontrack = (event) => {
@@ -1249,6 +1256,7 @@ const ChatPage = () => {
             <video
               ref={cameraVideoRef}
               autoPlay
+              playsInline
               muted
               className="w-24 h-18 bg-black rounded-lg border border-white/5"
             />
@@ -1256,6 +1264,7 @@ const ChatPage = () => {
               <video
                 ref={remoteVideoRef}
                 autoPlay
+                playsInline
                 className="w-24 h-18 bg-black rounded-lg border border-white/5"
               />
             ) : (
