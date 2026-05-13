@@ -78,7 +78,7 @@ const ChatPage = () => {
   const [isVideoCallActive, setIsVideoCallActive] = useState(false);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
-  const [callPeerConnection, setCallPeerConnection] = useState(null);
+  const callPeerConnectionRef = useRef(null);
   const cameraVideoRef = useRef(null);
   const cameraCaptureVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -542,16 +542,16 @@ const ChatPage = () => {
     }
 
     if (signal.type === "ANSWER") {
-      if (callPeerConnection && signal.sdp) {
-        await callPeerConnection.setRemoteDescription(signal.sdp);
+      if (callPeerConnectionRef.current && signal.sdp) {
+        await callPeerConnectionRef.current.setRemoteDescription(signal.sdp);
       }
       return;
     }
 
     if (signal.type === "ICE") {
-      if (callPeerConnection && signal.candidate) {
+      if (callPeerConnectionRef.current && signal.candidate) {
         try {
-          await callPeerConnection.addIceCandidate(signal.candidate);
+          await callPeerConnectionRef.current.addIceCandidate(signal.candidate);
         } catch (err) {
           console.error("Failed to add ICE candidate", err);
         }
@@ -612,7 +612,7 @@ const ChatPage = () => {
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 
-    setCallPeerConnection(pc);
+    callPeerConnectionRef.current = pc;
     setIsVideoCallActive(true);
 
     sendCallSignal({ type: "ANSWER", sdp: pc.localDescription, from: currentUser });
@@ -676,7 +676,7 @@ const ChatPage = () => {
     sendCallSignal({ type: "OFFER", sdp: pc.localDescription, from: currentUser });
 
     setLocalStream(stream);
-    setCallPeerConnection(pc);
+    callPeerConnectionRef.current = pc;
     setIsVideoCallActive(true);
   };
 
@@ -693,9 +693,9 @@ const ChatPage = () => {
   const endVideoCall = () => {
     cleanupCameraCaptureStream();
 
-    if (callPeerConnection) {
-      callPeerConnection.close();
-      setCallPeerConnection(null);
+    if (callPeerConnectionRef.current) {
+      callPeerConnectionRef.current.close();
+      callPeerConnectionRef.current = null;
     }
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
