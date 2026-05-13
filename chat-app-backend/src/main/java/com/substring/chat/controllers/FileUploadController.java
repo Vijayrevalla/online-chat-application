@@ -1,40 +1,28 @@
 package com.substring.chat.controllers;
 
-import org.springframework.beans.factory.annotation.Value;
+import com.substring.chat.entities.FileAttachment;
+import com.substring.chat.repositories.FileAttachmentRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 @RestController
 @CrossOrigin(originPatterns = "*")
 @RequestMapping("/upload")
 public class FileUploadController {
 
-    private static final Path UPLOAD_DIR = Paths.get("uploads");
+    private final FileAttachmentRepository fileAttachmentRepository;
 
-    @Value("${server.port:8083}")
-    private String serverPort;
-
-    static {
-        try {
-            Files.createDirectories(UPLOAD_DIR);
-        } catch (IOException e) {
-            throw new RuntimeException("Unable to create upload directory", e);
-        }
+    public FileUploadController(FileAttachmentRepository fileAttachmentRepository) {
+        this.fileAttachmentRepository = fileAttachmentRepository;
     }
 
     @PostMapping
@@ -49,24 +37,23 @@ public class FileUploadController {
         }
 
         try {
-            String extension = "";
-            String originalName = file.getOriginalFilename();
-            if (originalName != null && originalName.contains(".")) {
-                extension = originalName.substring(originalName.lastIndexOf('.'));
-            }
-            String generatedFilename = UUID.randomUUID().toString() + extension;
-            Path target = UPLOAD_DIR.resolve(generatedFilename);
-            Files.copy(file.getInputStream(), target);
+            String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
+            String contentType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
+            byte[] bytes = file.getBytes();
 
-            // Dynamically build the file URL
+            FileAttachment attachment = new FileAttachment(originalName, contentType, bytes);
+            FileAttachment saved = fileAttachmentRepository.save(attachment);
+
+            // Dynamically build the file URL pointing to our new DB serving endpoint
             String scheme = request.getScheme();
             String serverName = request.getServerName();
             int port = request.getServerPort();
             String fileUrl;
+            
             if (serverName != null && serverName.contains("onrender.com")) {
-                fileUrl = String.format("https://%s/uploads/%s", serverName, generatedFilename);
+                fileUrl = String.format("https://%s/upload/files/%s", serverName, saved.getId());
             } else {
-                fileUrl = String.format("%s://%s:%d/uploads/%s", scheme, serverName, port, generatedFilename);
+                fileUrl = String.format("%s://%s:%d/upload/files/%s", scheme, serverName, port, saved.getId());
             }
             
             Map<String, String> response = new HashMap<>();
@@ -76,5 +63,15 @@ public class FileUploadController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to save file"));
         }
+    }
+
+    @GetMapping("/files/{id}")
+    public ResponseEntity<byte[]> getFile(@PathVariable String id) {
+        return fileAttachmentRepository.findById(id)
+                .map(file -> ResponseEntity.ok()
+                        .contentType(MediaType.parseMediaType(file.getFileType()))
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + file.getFileName() + "\"")
+                        .body(file.getData()))
+                .orElse(ResponseEntity.notFound().build());
     }
 }
