@@ -149,7 +149,7 @@ const ChatPage = () => {
     } else if (video) {
       video.srcObject = null;
     }
-  }, [localStream]);
+  }, [localStream, isVideoCallActive]);
 
   useEffect(() => {
     const video = remoteVideoRef.current;
@@ -159,7 +159,7 @@ const ChatPage = () => {
     } else if (video) {
       video.srcObject = null;
     }
-  }, [remoteStream]);
+  }, [remoteStream, isVideoCallActive]);
 
   useEffect(() => {
     if (!isStompReady() || !pendingCallSignalsRef.current || pendingCallSignalsRef.current.length === 0) {
