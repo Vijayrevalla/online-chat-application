@@ -641,6 +641,9 @@ const ChatPage = () => {
           console.error("Failed to add ICE candidate", err);
         }
       }
+      return;
+    }
+
     if (signal.type === "END_CALL") {
       endVideoCall(true);
       toast.info("The call was ended by the other person.");
