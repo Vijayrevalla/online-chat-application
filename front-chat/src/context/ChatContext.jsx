@@ -7,6 +7,7 @@ const ChatContext = createContext();
 export const ChatProvider = ({ children }) => {
   const [roomId, setRoomId] = useState("");
   const [currentUser, setCurrentUser] = useState("");
+  const [currentUserAvatar, setCurrentUserAvatar] = useState("");
   const [connected, setConnected] = useState(false);
 
   return (
@@ -14,9 +15,11 @@ export const ChatProvider = ({ children }) => {
       value={{
         roomId,
         currentUser,
+        currentUserAvatar,
         connected,
         setRoomId,
         setCurrentUser,
+        setCurrentUserAvatar,
         setConnected,
       }}
     >

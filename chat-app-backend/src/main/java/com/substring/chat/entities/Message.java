@@ -30,6 +30,10 @@ public class Message {
     @Column(columnDefinition = "LONGTEXT")
     private String fileData;
 
+    private String senderAvatar;
+
+    private Boolean isDeleted = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "room_id")
     @JsonBackReference
@@ -118,5 +122,21 @@ public class Message {
 
     public void setRoom(Room room) {
         this.room = room;
+    }
+
+    public String getSenderAvatar() {
+        return senderAvatar;
+    }
+
+    public void setSenderAvatar(String senderAvatar) {
+        this.senderAvatar = senderAvatar;
+    }
+
+    public Boolean getIsDeleted() {
+        return isDeleted;
+    }
+
+    public void setIsDeleted(Boolean isDeleted) {
+        this.isDeleted = isDeleted;
     }
 }

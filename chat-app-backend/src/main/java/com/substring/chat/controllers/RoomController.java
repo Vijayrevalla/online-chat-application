@@ -89,5 +89,25 @@ public class RoomController {
         }
     }
 
+    // clear messages of room
+    @DeleteMapping("/{roomId}/messages")
+    public ResponseEntity<?> clearChat(@PathVariable String roomId) {
+        try {
+            Room room = roomStoreService.findByRoomId(roomId);
+            if (room == null) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            // Clearing the list triggers Hibernate orphanRemoval=true 
+            // to delete rows from the DB automatically!
+            room.getMessages().clear();
+            roomStoreService.save(room);
+            
+            return ResponseEntity.ok().build();
+        } catch (Exception ex) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body("Error while clearing database chat logs.");
+        }
+    }
 
 }

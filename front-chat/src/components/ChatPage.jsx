@@ -1,15 +1,28 @@
 import { useEffect, useRef, useState } from "react";
-import { MdAttachFile, MdClose, MdEmojiEmotions, MdSend } from "react-icons/md";
+import { MdAttachFile, MdClose, MdEmojiEmotions, MdSend, MdDelete, MdCleaningServices } from "react-icons/md";
 import useChatContext from "../context/ChatContext";
 import { useNavigate } from "react-router";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 import toast from "react-hot-toast";
 import { baseURL } from "../config/AxiosHelper";
-import { getMessagess } from "../services/RoomService";
+import { getMessagess, clearChatApi } from "../services/RoomService";
 import { timeAgo } from "../config/helper";
 
-const EMOJI_OPTIONS = ["😀", "😂", "😍", "😎", "🤝", "👍", "🎉", "🔥", "❤️", "🙏"];
+const EMOJI_CATEGORIES = [
+  {
+    name: "Faces",
+    emojis: ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😋", "😛", "😜", "🤪", "🤨", "🧐", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "🤗", "🤔", "🤭", "🤫", "😶", "😐", "😑", "😬", "🙄", "😯", "🥱", "😴", "🤤", "😵", "🤐", "🥴", "🤢", "🤮", "😷"],
+  },
+  {
+    name: "Hearts/Gestures",
+    emojis: ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "💔", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "👋", "🤚", "🖐️", "✋", "🖖", "👌", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "👇", "☝️", "👍", "👎", "✊", "👊", "🤛", "🤜", "👏", "🙌", "👐", "🤲", "🤝", "🙏", "💪", "🤳"],
+  },
+  {
+    name: "Party/Vibe",
+    emojis: ["✨", "🔥", "🎉", "🎊", "🎂", "🎈", "🎨", "🎭", "🎪", "🎟️", "🏆", "🏅", "🥇", "⚽", "🎮", "🎲", "🧩", "🚀", "🛸", "🪐", "⭐", "🌟", "🌈", "⛅", "⚡", "❄️", "💧", "🌊", "🍕", "🍔", "🍟", "🍺", "🍷", "☕", "🍩", "🍎"],
+  }
+];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB (base64 expands ~33%, keep safe for STOMP frames)
 
 const formatFileSize = (size) => {
@@ -37,6 +50,7 @@ const ChatPage = () => {
   const {
     roomId,
     currentUser,
+    currentUserAvatar,
     connected,
     setConnected,
     setRoomId,
@@ -175,12 +189,36 @@ const ChatPage = () => {
           }
 
           if (newMessage.type === "JOIN") {
-            setOnlineUsers((prev) => (prev.includes(newMessage.user) ? prev : [...prev, newMessage.user]));
+            setOnlineUsers((prev) => {
+              if (prev.some((u) => u.name === newMessage.user)) return prev;
+              return [...prev, { name: newMessage.user, avatar: newMessage.avatar }];
+            });
+            
+            // Handshake Discovery: If someone else joined, echo my presence so they discover me!
+            if (newMessage.user !== currentUser) {
+              client.publish({
+                destination: `/app/userPresence/${roomId}`,
+                body: JSON.stringify({ user: currentUser, type: "JOIN", avatar: currentUserAvatar }),
+              });
+            }
             return;
           }
 
           if (newMessage.type === "LEAVE") {
-            setOnlineUsers((prev) => prev.filter((user) => user !== newMessage.user));
+            setOnlineUsers((prev) => prev.filter((u) => u.name !== newMessage.user));
+            return;
+          }
+
+          if (newMessage.type === "CLEAR_CHAT") {
+            setMessages([]);
+            toast.success("Chat history cleared.");
+            return;
+          }
+
+          if (newMessage.messageType === "DELETE") {
+            setMessages((prev) =>
+              prev.map((msg) => (msg.id === newMessage.id ? { ...msg, ...newMessage } : msg))
+            );
             return;
           }
 
@@ -214,10 +252,10 @@ const ChatPage = () => {
         setConnectionStatus("CONNECTED");
         toast.success("Connected to chat server.");
 
-        // broadcast presence
+        // broadcast presence with avatar
         client.publish({
           destination: `/app/userPresence/${roomId}`,
-          body: JSON.stringify({ user: currentUser, type: "JOIN" }),
+          body: JSON.stringify({ user: currentUser, type: "JOIN", avatar: currentUserAvatar }),
         });
 
 
@@ -380,6 +418,7 @@ const ChatPage = () => {
       fileName: selectedFile?.name || null,
       fileType: selectedFile?.type || null,
       fileData: attachmentUrl,
+      senderAvatar: currentUserAvatar,
     };
 
     try {
@@ -393,6 +432,47 @@ const ChatPage = () => {
     } catch (error) {
       console.error("Failed to send STOMP message", error);
       toast.error("Failed to send message. Reconnect and try again.");
+    }
+  };
+
+  const handleDeleteMessage = (messageId) => {
+    if (!isStompReady()) {
+      toast.error("Chat server not connected.");
+      return;
+    }
+    if (!window.confirm("Delete message for everyone?")) {
+      return;
+    }
+    try {
+      stompClient.publish({
+        destination: `/app/deleteMessage/${roomId}`,
+        body: JSON.stringify({ messageId }),
+      });
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to delete message.");
+    }
+  };
+
+  const handleClearChat = async () => {
+    if (!window.confirm("🚨 Are you sure you want to permanently clear this room's chat history? This deletes all database records!")) {
+      return;
+    }
+    try {
+      await clearChatApi(roomId);
+      
+      if (isStompReady()) {
+        stompClient.publish({
+          destination: `/app/clearChat/${roomId}`,
+          body: JSON.stringify({ type: "CLEAR_CHAT", user: currentUser }),
+        });
+      }
+      
+      setMessages([]);
+      toast.success("Chat cleared successfully.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Could not clear chat logs.");
     }
   };
 
@@ -769,6 +849,14 @@ const ChatPage = () => {
   const renderMessageContent = (message) => {
     const messageType = message.messageType || "TEXT";
 
+    if (message.isDeleted || messageType === "DELETE") {
+      return (
+        <span className="italic text-slate-400/80 text-[13px] flex items-center gap-1 select-none">
+          🚫 This message was deleted
+        </span>
+      );
+    }
+
     if (messageType === "IMAGE" && message.fileData) {
       const secureUrl = ensureHttps(message.fileData);
       return (
@@ -943,6 +1031,32 @@ const ChatPage = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 md:gap-6">
+          {/* Live Online Avatars Stack */}
+          {onlineUsers.length > 0 && (
+            <div className="flex items-center -space-x-2 hover:space-x-1 transition-all duration-300 cursor-help select-none mr-2 md:mr-0">
+              {onlineUsers.slice(0, 5).map((u, idx) => (
+                <div
+                  key={`${u.name}-${idx}`}
+                  className="relative h-8 w-8 rounded-full bg-slate-700 border border-slate-900 shadow-md shrink-0 flex items-center justify-center overflow-hidden group"
+                >
+                  {u.avatar ? (
+                    <img src={ensureHttps(u.avatar)} alt={u.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-[10px] font-bold text-slate-300 uppercase">{u.name?.charAt(0)}</span>
+                  )}
+                  <div className="opacity-0 group-hover:opacity-100 pointer-events-none absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-slate-950 text-white text-[9px] font-medium tracking-wider px-1.5 py-0.5 rounded-md border border-white/10 whitespace-nowrap z-50 transition shadow-xl">
+                    {u.name}
+                  </div>
+                </div>
+              ))}
+              {onlineUsers.length > 5 && (
+                <div className="h-8 w-8 rounded-full bg-indigo-600 border border-slate-900 shadow-md shrink-0 flex items-center justify-center text-[9px] font-bold text-indigo-100 relative z-10">
+                  +{onlineUsers.length - 5}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="bg-white/5 border border-white/10 px-3 py-1 rounded-full text-xs md:text-sm flex items-center gap-1.5">
             <span className="text-slate-400">User:</span>
             <span className="font-semibold text-blue-300">{currentUser}</span>
@@ -964,12 +1078,22 @@ const ChatPage = () => {
           </div>
         </div>
 
-        <button
-          onClick={handleLogout}
-          className="w-full md:w-auto px-4 py-2 bg-rose-500/10 hover:bg-rose-600 border border-rose-500/20 hover:border-transparent text-rose-200 hover:text-white rounded-xl text-sm font-semibold transition-all duration-300 active:scale-95"
-        >
-          Leave Room
-        </button>
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <button
+            onClick={handleClearChat}
+            className="flex-1 md:flex-initial px-3.5 py-2 bg-amber-500/10 hover:bg-amber-600 border border-amber-500/20 hover:border-transparent text-amber-200 hover:text-white rounded-xl text-sm font-semibold transition-all duration-300 active:scale-95 flex items-center justify-center gap-1.5"
+            title="Clear Room History"
+          >
+            <MdCleaningServices size={15} />
+            <span className="md:hidden lg:inline text-xs uppercase tracking-wider font-bold">Clear Chat</span>
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex-1 md:flex-initial px-4 py-2 bg-rose-500/10 hover:bg-rose-600 border border-rose-500/20 hover:border-transparent text-rose-200 hover:text-white rounded-xl text-sm font-semibold transition-all duration-300 active:scale-95 text-xs uppercase tracking-wider"
+          >
+            Leave Room
+          </button>
+        </div>
       </header>
 
       {/* Main Chat Box */}
@@ -989,13 +1113,30 @@ const ChatPage = () => {
                   : "bg-slate-900 border border-white/5 text-slate-100 rounded-tl-none"
               }`}
             >
-              <div className="h-9 w-9 rounded-full bg-slate-800 text-slate-200 border border-white/10 flex items-center justify-center font-bold text-sm shrink-0">
-                {getAvatarLabel(message.sender)}
+              <div className="h-9 w-9 rounded-full overflow-hidden border border-white/10 flex items-center justify-center bg-slate-800 text-slate-200 font-bold text-sm shrink-0 shadow-md">
+                {message.senderAvatar ? (
+                  <img src={ensureHttps(message.senderAvatar)} className="h-full w-full object-cover" alt={message.sender} />
+                ) : (
+                  getAvatarLabel(message.sender)
+                )}
               </div>
-              <div className="flex flex-col gap-1 min-w-0">
-                <span className="text-xs font-semibold text-blue-300">{message.sender}</span>
+              <div className="flex flex-col gap-1 min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-xs font-semibold text-blue-300 truncate">{message.sender}</span>
+                  
+                  {/* WhatsApp-style Deletion Hook */}
+                  {message.sender === currentUser && !message.isDeleted && message.messageType !== "DELETE" && message.id && (
+                    <button
+                      onClick={() => handleDeleteMessage(message.id)}
+                      className="text-slate-400 hover:text-rose-400 transition p-0.5 opacity-50 hover:opacity-100"
+                      title="Delete message for everyone"
+                    >
+                      <MdDelete size={13} />
+                    </button>
+                  )}
+                </div>
                 <div className="text-sm leading-relaxed">{renderMessageContent(message)}</div>
-                <span className="text-[10px] text-slate-400 mt-1 self-end">{timeAgo(message.timeStamp)}</span>
+                <span className="text-[10px] text-slate-400 mt-1 self-end opacity-60">{timeAgo(message.timeStamp)}</span>
               </div>
             </div>
           </div>
@@ -1087,6 +1228,29 @@ const ChatPage = () => {
             </div>
           ) : null}
 
+          {/* Categorized Scrollable Emoji Picker Panel */}
+          {showEmojiPicker ? (
+            <div className="mx-2 bg-slate-950/95 border border-white/10 rounded-xl p-3.5 animate-slide-up max-h-56 overflow-y-auto space-y-4 backdrop-blur-xl shadow-inner custom-scrollbar select-none z-50">
+              {EMOJI_CATEGORIES.map((category) => (
+                <div key={category.name} className="space-y-1.5">
+                  <p className="text-[9px] uppercase tracking-widest font-extrabold text-blue-400/80">{category.name}</p>
+                  <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-1.5">
+                    {category.emojis.map((emo, idx) => (
+                      <button
+                        key={`${emo}-${idx}`}
+                        type="button"
+                        onClick={() => handleEmojiSelect(emo)}
+                        className="h-9 flex items-center justify-center text-xl rounded-lg hover:bg-white/10 active:scale-125 transition duration-150 cursor-pointer"
+                      >
+                        {emo}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
             {/* Input & Send button row (takes priority on top on mobile) */}
             <div className="flex flex-1 items-center gap-2 order-1 md:order-2 w-full">
@@ -1116,6 +1280,16 @@ const ChatPage = () => {
 
             {/* Utility buttons row (rendered elegantly below input on mobile, left on desktop) */}
             <div className="flex items-center justify-between md:justify-start gap-2 order-2 md:order-1 w-full md:w-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className={`flex-1 md:flex-initial h-11 w-11 border border-white/5 rounded-xl flex items-center justify-center transition active:scale-95 ${
+                  showEmojiPicker ? "bg-blue-600 text-white ring-2 ring-blue-400/30 animate-pulse-subtle" : "bg-slate-800 hover:bg-slate-700 text-slate-200"
+                }`}
+                title="Open Emoji Picker"
+              >
+                <MdEmojiEmotions size={20} />
+              </button>
               <button
                 type="button"
                 onClick={openCamera}

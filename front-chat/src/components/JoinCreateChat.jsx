@@ -4,13 +4,15 @@ import toast from "react-hot-toast";
 import { createRoomApi, joinChatApi } from "../services/RoomService";
 import useChatContext from "../context/ChatContext";
 import { useNavigate } from "react-router";
+import { baseURL } from "../config/AxiosHelper";
+
 const JoinCreateChat = () => {
   const [detail, setDetail] = useState({
     roomId: "",
     userName: "",
   });
 
-  const { setRoomId, setCurrentUser, setConnected } = useChatContext();
+  const { setRoomId, setCurrentUser, setCurrentUserAvatar, setConnected } = useChatContext();
   const navigate = useNavigate();
 
   function handleFormInputChange(event) {
@@ -18,6 +20,43 @@ const JoinCreateChat = () => {
       ...detail,
       [event.target.name]: event.target.value,
     });
+  }
+
+  const [avatarPreview, setAvatarPreview] = useState("");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  async function handleAvatarChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Avatar image must be smaller than 5MB");
+      return;
+    }
+
+    setAvatarPreview(URL.createObjectURL(file));
+    setUploadingAvatar(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch(`${baseURL}/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) {
+        throw new Error("Failed to upload profile picture");
+      }
+      const data = await response.json();
+      setCurrentUserAvatar(data.url);
+      toast.success("Profile picture uploaded successfully!");
+    } catch (error) {
+      console.error("Avatar upload error:", error);
+      toast.error("Could not upload profile photo.");
+    } finally {
+      setUploadingAvatar(false);
+    }
   }
 
   function validateForm() {
@@ -102,6 +141,35 @@ const JoinCreateChat = () => {
 
         {/* Form */}
         <div className="space-y-4">
+          {/* Profile Avatar Picker */}
+          <div className="flex flex-col items-center justify-center mb-2 group">
+            <div className="relative h-20 w-20 rounded-full overflow-hidden border-2 border-dashed border-slate-700 hover:border-blue-500 bg-white/5 transition-all cursor-pointer shadow-2xl flex items-center justify-center">
+              {avatarPreview ? (
+                <img src={avatarPreview} className="h-full w-full object-cover" alt="Avatar Preview" />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-2 text-slate-400">
+                  <span className="text-2xl mb-0.5">👤</span>
+                  <span className="text-[8px] font-bold uppercase tracking-widest">Add Photo</span>
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarChange}
+                className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                disabled={uploadingAvatar}
+              />
+              {uploadingAvatar && (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-[10px] font-bold text-blue-400">
+                  ...
+                </div>
+              )}
+            </div>
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-2 transition group-hover:text-slate-300">
+              {uploadingAvatar ? "Uploading Photo..." : "Set Profile Picture"}
+            </span>
+          </div>
+
           {/* name div */}
           <div className="space-y-1.5">
             <label htmlFor="name" className="text-xs font-semibold uppercase tracking-wider text-slate-300">

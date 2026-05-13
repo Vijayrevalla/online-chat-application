@@ -3,6 +3,7 @@ package com.substring.chat.controllers;
 import com.substring.chat.entities.Message;
 import com.substring.chat.entities.Room;
 import com.substring.chat.playload.MessageRequest;
+import com.substring.chat.repositories.MessageRepository;
 import com.substring.chat.services.RoomStoreService;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -20,9 +21,11 @@ public class ChatController {
 
 
     private final RoomStoreService roomStoreService;
+    private final MessageRepository messageRepository;
 
-    public ChatController(RoomStoreService roomStoreService) {
+    public ChatController(RoomStoreService roomStoreService, MessageRepository messageRepository) {
         this.roomStoreService = roomStoreService;
+        this.messageRepository = messageRepository;
     }
 
 
@@ -55,6 +58,7 @@ public class ChatController {
         message.setFileName(request.getFileName());
         message.setFileType(request.getFileType());
         message.setFileData(request.getFileData());
+        message.setSenderAvatar(request.getSenderAvatar());
 
         room.addMessage(message);
         roomStoreService.save(room);
@@ -88,6 +92,43 @@ public class ChatController {
             @RequestBody Map<String, Object> signal
     ) {
         return signal;
+    }
+
+    @MessageMapping("/deleteMessage/{roomId}")
+    @SendTo("/topic/room/{roomId}")
+    public Message deleteMessage(
+            @DestinationVariable String roomId,
+            @RequestBody Map<String, Object> payload
+    ) {
+        if (payload.get("messageId") == null) {
+            return null;
+        }
+        try {
+            Long messageId = Long.valueOf(payload.get("messageId").toString());
+            Message message = messageRepository.findById(messageId).orElse(null);
+            if (message != null) {
+                message.setIsDeleted(true);
+                message.setMessageType("DELETE");
+                message.setContent("🚫 This message was deleted");
+                message.setFileData(null);
+                message.setFileName(null);
+                message.setFileType(null);
+                return messageRepository.save(message);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    @MessageMapping("/clearChat/{roomId}")
+    @SendTo("/topic/room/{roomId}")
+    public Map<String, Object> clearChatSignal(
+            @DestinationVariable String roomId,
+            @RequestBody Map<String, Object> payload
+    ) {
+        // echoes CLEAR_CHAT broadcast back to all room occupants
+        return payload;
     }
 
     private String resolveMessageType(String messageType) {

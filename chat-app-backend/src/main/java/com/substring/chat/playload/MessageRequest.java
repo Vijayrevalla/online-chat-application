@@ -9,6 +9,7 @@ public class MessageRequest {
     private String fileName;
     private String fileType;
     private String fileData;
+    private String senderAvatar;
 
     public MessageRequest() {
     }
@@ -73,5 +74,13 @@ public class MessageRequest {
 
     public void setFileData(String fileData) {
         this.fileData = fileData;
+    }
+
+    public String getSenderAvatar() {
+        return senderAvatar;
+    }
+
+    public void setSenderAvatar(String senderAvatar) {
+        this.senderAvatar = senderAvatar;
     }
 }
