@@ -37,6 +37,12 @@ const getAvatarLabel = (name = "U") => name.trim().charAt(0).toUpperCase() || "U
 const ensureHttps = (url) => {
   if (!url) return url;
   let sanitized = url;
+  
+  // Do NOT force HTTPS for local development hosts
+  if (sanitized.includes("localhost") || sanitized.includes("127.0.0.1")) {
+    return sanitized;
+  }
+  
   if (sanitized.startsWith("http://")) {
     sanitized = sanitized.replace("http://", "https://");
   }
