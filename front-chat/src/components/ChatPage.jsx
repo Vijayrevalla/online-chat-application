@@ -289,7 +289,7 @@ const ChatPage = () => {
             return;
           }
 
-          if (newMessage.type === "VIDEO_CALL" || newMessage.type === "OFFER" || newMessage.type === "ANSWER" || newMessage.type === "ICE") {
+          if (newMessage.type === "VIDEO_CALL" || newMessage.type === "OFFER" || newMessage.type === "ANSWER" || newMessage.type === "ICE" || newMessage.type === "END_CALL") {
             processIncomingCallSignal(newMessage);
             return;
           }
@@ -641,6 +641,9 @@ const ChatPage = () => {
           console.error("Failed to add ICE candidate", err);
         }
       }
+    if (signal.type === "END_CALL") {
+      endVideoCall(true);
+      toast.info("The call was ended by the other person.");
       return;
     }
   };
@@ -658,10 +661,15 @@ const ChatPage = () => {
     const pc = new RTCPeerConnection(getPeerConfiguration());
 
     pc.ontrack = (event) => {
-      const remote = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
       setRemoteStream((prev) => {
-        if (prev) return prev;
-        return remote;
+        if (prev) {
+          // Append track directly to existing stream object so that Video track integrates with Audio
+          if (!prev.getTracks().find((t) => t.id === event.track.id)) {
+            prev.addTrack(event.track);
+          }
+          return prev;
+        }
+        return event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
       });
     };
 
@@ -745,10 +753,15 @@ const ChatPage = () => {
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
     pc.ontrack = (event) => {
-      const remote = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
       setRemoteStream((prev) => {
-        if (prev) return prev;
-        return remote;
+        if (prev) {
+          // Append track directly to existing stream object so that Video track integrates with Audio
+          if (!prev.getTracks().find((t) => t.id === event.track.id)) {
+            prev.addTrack(event.track);
+          }
+          return prev;
+        }
+        return event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
       });
     };
 
@@ -782,7 +795,7 @@ const ChatPage = () => {
     }
   };
 
-  const endVideoCall = () => {
+  const endVideoCall = (isInitiatedRemotely = false) => {
     cleanupCameraCaptureStream();
 
     if (callPeerConnectionRef.current) {
@@ -797,7 +810,15 @@ const ChatPage = () => {
       remoteStream.getTracks().forEach((track) => track.stop());
       setRemoteStream(null);
     }
+    
+    setIncomingCallOffer(null);
     setIsVideoCallActive(false);
+
+    // Shield check: strict boolean comparison prevents React SyntheticEvents from breaking logic
+    const wasRemoteEnd = isInitiatedRemotely === true;
+    if (!wasRemoteEnd) {
+      sendCallSignal({ type: "END_CALL", from: currentUser });
+    }
   };
 
   const captureCameraPhoto = async () => {
