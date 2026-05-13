@@ -646,7 +646,7 @@ const ChatPage = () => {
 
     if (signal.type === "END_CALL") {
       endVideoCall(true);
-      toast.info("The call was ended by the other person.");
+      toast("The call was ended by the other person.", { icon: "ℹ️" });
       return;
     }
   };
@@ -666,11 +666,12 @@ const ChatPage = () => {
     pc.ontrack = (event) => {
       setRemoteStream((prev) => {
         if (prev) {
-          // Append track directly to existing stream object so that Video track integrates with Audio
+          // Append track directly to existing stream object
           if (!prev.getTracks().find((t) => t.id === event.track.id)) {
             prev.addTrack(event.track);
           }
-          return prev;
+          // Create a new wrapper so React detects the state change and re-binds srcObject to include the Video track!
+          return new MediaStream(prev.getTracks());
         }
         return event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
       });
@@ -758,11 +759,12 @@ const ChatPage = () => {
     pc.ontrack = (event) => {
       setRemoteStream((prev) => {
         if (prev) {
-          // Append track directly to existing stream object so that Video track integrates with Audio
+          // Append track directly to existing stream object
           if (!prev.getTracks().find((t) => t.id === event.track.id)) {
             prev.addTrack(event.track);
           }
-          return prev;
+          // Create a new wrapper so React detects the state change and re-binds srcObject to include the Video track!
+          return new MediaStream(prev.getTracks());
         }
         return event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
       });
