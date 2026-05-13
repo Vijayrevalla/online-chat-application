@@ -79,6 +79,25 @@ const ChatPage = () => {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [incomingCallOffer, setIncomingCallOffer] = useState(null);
+  const [callMode, setCallMode] = useState("video"); // "video" or "audio"
+
+  // Globally available high-speed STUN/TURN relay configuration to fix NAT / 4G / Cross-Network blocking
+  const getPeerConfiguration = () => ({
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:openrelay.metered.ca:80" },
+      {
+        urls: [
+          "turn:openrelay.metered.ca:80",
+          "turn:openrelay.metered.ca:443",
+          "turn:openrelay.metered.ca:443?transport=tcp"
+        ],
+        username: "openrelayproject",
+        credential: "openrelayproject"
+      }
+    ],
+    iceCandidatePoolSize: 10
+  });
   const callPeerConnectionRef = useRef(null);
   const pendingIceCandidatesRef = useRef([]);
   const cameraVideoRef = useRef(null);
@@ -584,7 +603,7 @@ const ChatPage = () => {
 
     if (signal.type === "OFFER") {
       setIncomingCallOffer(signal);
-      toast("Incoming video call...", { icon: "📞", duration: 8000 });
+      toast(`Incoming ${signal.callMode === "audio" ? "voice" : "video"} call...`, { icon: "📞", duration: 8000 });
       return;
     }
 
@@ -623,11 +642,11 @@ const ChatPage = () => {
       return;
     }
 
+    const mode = signal.callMode || "video";
+    setCallMode(mode);
     pendingIceCandidatesRef.current = []; // Reset candidate queue for new call
 
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    });
+    const pc = new RTCPeerConnection(getPeerConfiguration());
 
     pc.ontrack = (event) => {
       const remote = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
@@ -651,7 +670,7 @@ const ChatPage = () => {
 
     let stream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({ video: mode === "video", audio: true });
     } catch (err) {
       console.error("initiateCallReception getUserMedia failed", err);
       if (err.name === "NotReadableError" || err.name === "NotAllowedError") {
@@ -684,29 +703,28 @@ const ChatPage = () => {
     }
   };
 
-  const startVideoCall = async () => {
+  const startCall = async (mode = "video") => {
     if (!window.navigator.mediaDevices) {
       toast.error("WebRTC is not supported in this browser.");
       return;
     }
 
     if (isVideoCallActive || localStream) {
-      toast.error("A video call is already active.");
+      toast.error("A call is already active.");
       return;
     }
 
+    setCallMode(mode);
     pendingIceCandidatesRef.current = []; // Reset queue for new call session
     cleanupCameraCaptureStream();
 
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    });
+    const pc = new RTCPeerConnection(getPeerConfiguration());
 
     let stream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({ video: mode === "video", audio: true });
     } catch (err) {
-      console.error("startVideoCall getUserMedia failed", err);
+      console.error("startCall getUserMedia failed", err);
       if (err.name === "NotReadableError" || err.name === "NotAllowedError") {
         toast.error("Camera/microphone device is busy or permission denied.");
       } else {
@@ -714,7 +732,6 @@ const ChatPage = () => {
       }
       return;
     }
-
 
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
@@ -739,7 +756,7 @@ const ChatPage = () => {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    sendCallSignal({ type: "OFFER", sdp: pc.localDescription, from: currentUser });
+    sendCallSignal({ type: "OFFER", sdp: pc.localDescription, from: currentUser, callMode: mode });
 
     setLocalStream(stream);
     callPeerConnectionRef.current = pc;
@@ -1267,24 +1284,43 @@ const ChatPage = () => {
       {/* Video Call Overlay */}
       {isVideoCallActive ? (
         <div className="fixed bottom-24 right-4 bg-slate-900/95 border border-white/10 rounded-2xl p-4 shadow-2xl z-40 max-w-xs animate-slide-up">
-          <h2 className="text-xs font-bold uppercase tracking-wider mb-2 text-slate-400">Video Call</h2>
+          <h2 className="text-xs font-bold uppercase tracking-wider mb-2 text-slate-400">
+            {callMode === "audio" ? "Voice Call" : "Video Call"}
+          </h2>
           <div className="flex gap-2">
-            <video
-              ref={cameraVideoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-24 h-18 bg-black rounded-lg border border-white/5"
-            />
-            {remoteStream ? (
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                className="w-24 h-18 bg-black rounded-lg border border-white/5"
-              />
+            {callMode === "audio" ? (
+              <div className="flex items-center gap-3 py-2 px-3 bg-white/5 rounded-xl w-full border border-white/5">
+                <div className="h-10 w-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center animate-pulse">
+                  <span className="text-lg">📞</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-slate-200">{remoteStream ? "In Call" : "Connecting..."}</p>
+                  <p className="text-[10px] text-emerald-400">{remoteStream ? "Connected" : "Ringing"}</p>
+                </div>
+                {/* Maintain video tags in hidden state for WebRTC pipeline execution */}
+                <video ref={cameraVideoRef} autoPlay playsInline muted className="hidden" />
+                <video ref={remoteVideoRef} autoPlay playsInline className="hidden" />
+              </div>
             ) : (
-              <div className="w-24 h-18 bg-slate-800 rounded-lg flex items-center justify-center text-[10px] text-slate-400">Waiting...</div>
+              <>
+                <video
+                  ref={cameraVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-24 h-18 bg-black rounded-lg border border-white/5 object-cover transform -scale-x-100"
+                />
+                {remoteStream ? (
+                  <video
+                    ref={remoteVideoRef}
+                    autoPlay
+                    playsInline
+                    className="w-24 h-18 bg-black rounded-lg border border-white/5 object-cover"
+                  />
+                ) : (
+                  <div className="w-24 h-18 bg-slate-800 rounded-lg flex items-center justify-center text-[10px] text-slate-400 animate-pulse">Waiting...</div>
+                )}
+              </>
             )}
           </div>
           <button
@@ -1306,9 +1342,11 @@ const ChatPage = () => {
               <span className="text-3xl animate-pulse">📞</span>
             </div>
             <div>
-              <h3 className="text-xl font-bold text-slate-100">Incoming Call</h3>
+              <h3 className="text-xl font-bold text-slate-100">
+                Incoming {incomingCallOffer.callMode === "audio" ? "Voice" : "Video"} Call
+              </h3>
               <p className="text-sm text-slate-400 mt-1">
-                <span className="text-emerald-400 font-semibold">{incomingCallOffer.from}</span> wants to video chat
+                <span className="text-emerald-400 font-semibold">{incomingCallOffer.from}</span> wants to chat
               </p>
             </div>
             <div className="flex gap-3">
@@ -1428,11 +1466,21 @@ const ChatPage = () => {
               </button>
               <button
                 type="button"
-                onClick={startVideoCall}
+                onClick={() => startCall("audio")}
                 className={`flex-1 md:flex-initial h-11 w-11 border border-white/5 rounded-xl flex items-center justify-center transition active:scale-95 ${
-                  isVideoCallActive ? "bg-rose-600 hover:bg-rose-700 text-white" : "bg-slate-800 hover:bg-slate-700 text-slate-200"
+                  isVideoCallActive && callMode === "audio" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-slate-800 hover:bg-slate-700 text-slate-200"
                 }`}
-                title="Start video call"
+                title="Voice Call"
+              >
+                📞
+              </button>
+              <button
+                type="button"
+                onClick={() => startCall("video")}
+                className={`flex-1 md:flex-initial h-11 w-11 border border-white/5 rounded-xl flex items-center justify-center transition active:scale-95 ${
+                  isVideoCallActive && callMode === "video" ? "bg-rose-600 hover:bg-rose-700 text-white" : "bg-slate-800 hover:bg-slate-700 text-slate-200"
+                }`}
+                title="Video Call"
               >
                 📹
               </button>
