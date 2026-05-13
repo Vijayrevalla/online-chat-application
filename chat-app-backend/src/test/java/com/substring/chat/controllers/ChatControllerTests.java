@@ -3,6 +3,7 @@ package com.substring.chat.controllers;
 import com.substring.chat.entities.Message;
 import com.substring.chat.entities.Room;
 import com.substring.chat.playload.MessageRequest;
+import com.substring.chat.repositories.MessageRepository;
 import com.substring.chat.repositories.RoomRepository;
 import com.substring.chat.services.RoomStoreService;
 import org.junit.jupiter.api.Test;
@@ -20,8 +21,9 @@ class ChatControllerTests {
     @Test
     void sendMessageCopiesAttachmentMetadata() {
         RoomRepository roomRepository = mock(RoomRepository.class);
+        MessageRepository messageRepository = mock(MessageRepository.class);
         RoomStoreService roomStoreService = new RoomStoreService(roomRepository);
-        ChatController chatController = new ChatController(roomStoreService);
+        ChatController chatController = new ChatController(roomStoreService, messageRepository);
 
         Room room = new Room();
         room.setRoomId("room1");
