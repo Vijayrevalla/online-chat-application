@@ -78,6 +78,7 @@ const ChatPage = () => {
   const [isVideoCallActive, setIsVideoCallActive] = useState(false);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
+  const [incomingCallOffer, setIncomingCallOffer] = useState(null);
   const callPeerConnectionRef = useRef(null);
   const pendingIceCandidatesRef = useRef([]);
   const cameraVideoRef = useRef(null);
@@ -574,7 +575,8 @@ const ChatPage = () => {
     }
 
     if (signal.type === "OFFER") {
-      await initiateCallReception(signal);
+      setIncomingCallOffer(signal);
+      toast("Incoming video call...", { icon: "📞", duration: 8000 });
       return;
     }
 
@@ -1281,6 +1283,41 @@ const ChatPage = () => {
       ) : null}
 
       {renderTypingIndicator()}
+
+      {/* Incoming Call Popup Overlay (Bypasses User-Gesture / Autoplay Restrictions) */}
+      {incomingCallOffer && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4">
+          <div className="bg-slate-900 border-2 border-emerald-500/30 p-6 rounded-3xl w-full max-w-sm shadow-2xl text-center space-y-6 scale-100 animate-in zoom-in-95 duration-200">
+            <div className="mx-auto h-16 w-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+              <span className="text-3xl animate-pulse">📞</span>
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-100">Incoming Call</h3>
+              <p className="text-sm text-slate-400 mt-1">
+                <span className="text-emerald-400 font-semibold">{incomingCallOffer.from}</span> wants to video chat
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIncomingCallOffer(null)}
+                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl transition active:scale-95 border border-white/5"
+              >
+                Decline
+              </button>
+              <button
+                onClick={async () => {
+                  const offer = incomingCallOffer;
+                  setIncomingCallOffer(null);
+                  await initiateCallReception(offer);
+                }}
+                className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold rounded-xl transition active:scale-95 shadow-lg shadow-emerald-500/20"
+              >
+                Accept
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Sticky Input Bar */}
       <div className="fixed bottom-0 left-0 right-0 p-4 md:p-6 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent">
