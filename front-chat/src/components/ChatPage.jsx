@@ -81,21 +81,15 @@ const ChatPage = () => {
   const [incomingCallOffer, setIncomingCallOffer] = useState(null);
   const [callMode, setCallMode] = useState("video"); // "video" or "audio"
 
-  // Globally available high-speed STUN/TURN relay configuration to fix NAT / 4G / Cross-Network blocking
+  // Dedicated fallback ICE configuration populated dynamically via OpenRelay API to guarantee traversal
+  const iceServersRef = useRef([
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" }
+  ]);
+
   const getPeerConfiguration = () => ({
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:openrelay.metered.ca:80" },
-      {
-        urls: [
-          "turn:openrelay.metered.ca:80",
-          "turn:openrelay.metered.ca:443",
-          "turn:openrelay.metered.ca:443?transport=tcp"
-        ],
-        username: "openrelayproject",
-        credential: "openrelayproject"
-      }
-    ],
+    iceServers: iceServersRef.current,
     iceCandidatePoolSize: 10
   });
   const callPeerConnectionRef = useRef(null);
@@ -139,8 +133,25 @@ const ChatPage = () => {
       }
     }
 
+    async function loadDynamicTurnServers() {
+      try {
+        // Dynamically fetch active, fully-working and non-blocked session TURN credentials
+        const res = await fetch("https://openrelay.metered.ca/api/v1/turn/credentials");
+        if (res.ok) {
+          const dynamicConfig = await res.json();
+          if (Array.isArray(dynamicConfig) && dynamicConfig.length > 0) {
+            iceServersRef.current = dynamicConfig;
+            console.log("Dynamic OpenRelay TURN cluster integrated.");
+          }
+        }
+      } catch (err) {
+        console.warn("Unable to load dynamic TURN cluster, using Google STUN fallback.", err);
+      }
+    }
+
     if (connected && roomId) {
       loadMessages();
+      loadDynamicTurnServers();
     }
   }, [connected, roomId]);
 
