@@ -662,6 +662,8 @@ const ChatPage = () => {
     pendingIceCandidatesRef.current = []; // Reset candidate queue for new call
 
     const pc = new RTCPeerConnection(getPeerConfiguration());
+    // FIX: Instantly cache ref so incoming ICE signaling during camera hardware warm-up is queued, not dropped!
+    callPeerConnectionRef.current = pc;
 
     pc.ontrack = (event) => {
       setRemoteStream((prev) => {
@@ -699,14 +701,13 @@ const ChatPage = () => {
       } else {
         toast.error("Failed to access camera/microphone to answer call.");
       }
+      // In case of error, nullify ref to prevent memory leaks
+      callPeerConnectionRef.current = null;
       return;
     }
 
-
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
     setLocalStream(stream);
-
-    callPeerConnectionRef.current = pc; // Must set Ref before remoteDescription to allow flushing
     
     try {
       await pc.setRemoteDescription(signal.sdp);
@@ -740,6 +741,7 @@ const ChatPage = () => {
     cleanupCameraCaptureStream();
 
     const pc = new RTCPeerConnection(getPeerConfiguration());
+    callPeerConnectionRef.current = pc;
 
     let stream;
     try {
@@ -751,6 +753,7 @@ const ChatPage = () => {
       } else {
         toast.error("Failed to access camera/microphone for call.");
       }
+      callPeerConnectionRef.current = null;
       return;
     }
 
@@ -786,7 +789,6 @@ const ChatPage = () => {
     sendCallSignal({ type: "OFFER", sdp: pc.localDescription, from: currentUser, callMode: mode });
 
     setLocalStream(stream);
-    callPeerConnectionRef.current = pc;
     setIsVideoCallActive(true);
   };
 
@@ -804,17 +806,28 @@ const ChatPage = () => {
     cleanupCameraCaptureStream();
 
     if (callPeerConnectionRef.current) {
-      callPeerConnectionRef.current.close();
+      try {
+        callPeerConnectionRef.current.close();
+      } catch (e) {
+        console.warn("Failed to close PC explicitly:", e);
+      }
       callPeerConnectionRef.current = null;
     }
-    if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
-      setLocalStream(null);
-    }
-    if (remoteStream) {
-      remoteStream.getTracks().forEach((track) => track.stop());
-      setRemoteStream(null);
-    }
+
+    // Functional updates completely immunize stream cleanup against Stale Closures during background signal dispatch
+    setLocalStream((prev) => {
+      if (prev) {
+        prev.getTracks().forEach((track) => track.stop());
+      }
+      return null;
+    });
+
+    setRemoteStream((prev) => {
+      if (prev) {
+        prev.getTracks().forEach((track) => track.stop());
+      }
+      return null;
+    });
     
     setIncomingCallOffer(null);
     setIsVideoCallActive(false);
