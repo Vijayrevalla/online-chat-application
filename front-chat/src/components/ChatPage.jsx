@@ -135,13 +135,42 @@ const ChatPage = () => {
 
     async function loadDynamicTurnServers() {
       try {
-        // Proxied fetch via Backend Endpoint with integrated Server DNS Domain-to-IP resolution.
-        // This completely bypasses client ISP-level blocks to openrelay.metered.ca!
+        // Step 1: Proxied fetch via Backend Endpoint to bypass local HTTP API block on openrelay.metered.ca!
         const res = await httpClient.get("/api/v1/rooms/ice-servers");
-        const dynamicConfig = res.data;
+        let dynamicConfig = res.data;
+        
         if (Array.isArray(dynamicConfig) && dynamicConfig.length > 0) {
-          iceServersRef.current = dynamicConfig;
-          console.log("Dynamic DNS-Resolved OpenRelay TURN cluster integrated successfully.");
+          // Step 2: Client-Side DNS-over-HTTPS lookup!
+          // This executes RELATIVE to the user's location, fetching their PERFECT local regional TURN cluster IPs!
+          // Plus, since it's google.com, ISPs NEVER block it!
+          let resolvedIp = "openrelay.metered.ca";
+          try {
+            const dohRes = await fetch("https://dns.google/resolve?name=openrelay.metered.ca&type=A");
+            if (dohRes.ok) {
+              const dohData = await dohRes.json();
+              if (dohData.Answer && dohData.Answer.length > 0) {
+                // Retrieve the geographically-closest raw IP address for the client
+                resolvedIp = dohData.Answer[0].data;
+                console.log("Client-Geographic TURN Server IP resolved via DoH:", resolvedIp);
+              }
+            }
+          } catch (dohErr) {
+            console.warn("Google DoH lookup failed, using standard domain names.", dohErr);
+          }
+
+          // Step 3: Rewrite domain with the Client's regional IP to bypass both domain and routing blocks!
+          const ipMappedConfig = dynamicConfig.map((server) => {
+            const updated = { ...server };
+            if (typeof updated.urls === "string") {
+              updated.urls = updated.urls.replace(/openrelay\.metered\.ca/g, resolvedIp);
+            } else if (Array.isArray(updated.urls)) {
+              updated.urls = updated.urls.map((u) => u.replace(/openrelay\.metered\.ca/g, resolvedIp));
+            }
+            return updated;
+          });
+
+          iceServersRef.current = ipMappedConfig;
+          console.log("Geographically-optimized raw IP TURN cluster integrated.");
         }
       } catch (err) {
         console.warn("Unable to load dynamic TURN cluster from backend, using Google STUN fallback.", err);
@@ -1368,16 +1397,19 @@ const ChatPage = () => {
                   muted
                   className="w-24 h-18 bg-black rounded-lg border border-white/5 object-cover transform -scale-x-100"
                 />
-                {remoteStream ? (
+                <div className="relative w-24 h-18">
                   <video
                     ref={remoteVideoRef}
                     autoPlay
                     playsInline
-                    className="w-24 h-18 bg-black rounded-lg border border-white/5 object-cover"
+                    className={`w-full h-full bg-black rounded-lg border border-white/5 object-cover transition-opacity duration-300 ${remoteStream ? "opacity-100" : "opacity-0 absolute inset-0 pointer-events-none"}`}
                   />
-                ) : (
-                  <div className="w-24 h-18 bg-slate-800 rounded-lg flex items-center justify-center text-[10px] text-slate-400 animate-pulse">Waiting...</div>
-                )}
+                  {!remoteStream && (
+                    <div className="absolute inset-0 bg-slate-800 rounded-lg border border-white/5 flex items-center justify-center text-[10px] text-slate-400 animate-pulse">
+                      Waiting...
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </div>

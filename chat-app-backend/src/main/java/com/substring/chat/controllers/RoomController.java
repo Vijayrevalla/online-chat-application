@@ -115,7 +115,7 @@ public class RoomController {
         }
     }
 
-    // Proxied Dynamic Ice Servers with IP Resolution to bypass ISP-level domain blocks!
+    // Proxied Dynamic Ice Servers transparent proxy to bypass ISP-level API blocks!
     @GetMapping("/ice-servers")
     public ResponseEntity<?> getIceServers() {
         try {
@@ -128,34 +128,6 @@ public class RoomController {
                 return ResponseEntity.ok(fallbackStunServers());
             }
 
-            // Perform Backend DNS Lookup to resolve domain to raw IPv4
-            String resolvedIp = "openrelay.metered.ca";
-            try {
-                InetAddress[] addresses = InetAddress.getAllByName("openrelay.metered.ca");
-                if (addresses != null && addresses.length > 0) {
-                    resolvedIp = addresses[0].getHostAddress();
-                }
-            } catch (Exception e) {
-                System.err.println("Failed to resolve Metered IP, fallback to domain: " + e.getMessage());
-            }
-
-            // Rewrite URLs in the ICE Servers block to replace the domain with raw IP
-            for (Map<String, Object> server : response) {
-                Object urlsObj = server.get("urls");
-                if (urlsObj instanceof String) {
-                    String modified = ((String) urlsObj).replace("openrelay.metered.ca", resolvedIp);
-                    server.put("urls", modified);
-                } else if (urlsObj instanceof List) {
-                    @SuppressWarnings("unchecked")
-                    List<String> urlsList = (List<String>) urlsObj;
-                    List<String> modifiedList = new ArrayList<>();
-                    for (String u : urlsList) {
-                        modifiedList.add(u.replace("openrelay.metered.ca", resolvedIp));
-                    }
-                    server.put("urls", modifiedList);
-                }
-            }
-            
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             System.err.println("Proxying TURN servers failed: " + e.getMessage());
