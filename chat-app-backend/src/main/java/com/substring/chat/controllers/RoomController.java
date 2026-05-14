@@ -6,8 +6,13 @@ import com.substring.chat.services.RoomStoreService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 
+import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/rooms")
@@ -108,6 +113,68 @@ public class RoomController {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body("Error while clearing database chat logs.");
         }
+    }
+
+    // Proxied Dynamic Ice Servers with IP Resolution to bypass ISP-level domain blocks!
+    @GetMapping("/ice-servers")
+    public ResponseEntity<?> getIceServers() {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            String url = "https://openrelay.metered.ca/api/v1/turn/credentials";
+            
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> response = restTemplate.getForObject(url, List.class);
+            if (response == null || response.isEmpty()) {
+                return ResponseEntity.ok(fallbackStunServers());
+            }
+
+            // Perform Backend DNS Lookup to resolve domain to raw IPv4
+            String resolvedIp = "openrelay.metered.ca";
+            try {
+                InetAddress[] addresses = InetAddress.getAllByName("openrelay.metered.ca");
+                if (addresses != null && addresses.length > 0) {
+                    resolvedIp = addresses[0].getHostAddress();
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to resolve Metered IP, fallback to domain: " + e.getMessage());
+            }
+
+            // Rewrite URLs in the ICE Servers block to replace the domain with raw IP
+            for (Map<String, Object> server : response) {
+                Object urlsObj = server.get("urls");
+                if (urlsObj instanceof String) {
+                    String modified = ((String) urlsObj).replace("openrelay.metered.ca", resolvedIp);
+                    server.put("urls", modified);
+                } else if (urlsObj instanceof List) {
+                    @SuppressWarnings("unchecked")
+                    List<String> urlsList = (List<String>) urlsObj;
+                    List<String> modifiedList = new ArrayList<>();
+                    for (String u : urlsList) {
+                        modifiedList.add(u.replace("openrelay.metered.ca", resolvedIp));
+                    }
+                    server.put("urls", modifiedList);
+                }
+            }
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            System.err.println("Proxying TURN servers failed: " + e.getMessage());
+            return ResponseEntity.ok(fallbackStunServers());
+        }
+    }
+
+    private List<Map<String, Object>> fallbackStunServers() {
+        List<Map<String, Object>> fallback = new ArrayList<>();
+        
+        Map<String, Object> s1 = new HashMap<>();
+        s1.put("urls", "stun:stun.l.google.com:19302");
+        fallback.add(s1);
+        
+        Map<String, Object> s2 = new HashMap<>();
+        s2.put("urls", "stun:stun1.l.google.com:3478");
+        fallback.add(s2);
+        
+        return fallback;
     }
 
 }

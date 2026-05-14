@@ -5,7 +5,7 @@ import { useNavigate } from "react-router";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 import toast from "react-hot-toast";
-import { baseURL } from "../config/AxiosHelper";
+import { baseURL, httpClient } from "../config/AxiosHelper";
 import { getMessagess, clearChatApi } from "../services/RoomService";
 import { timeAgo } from "../config/helper";
 
@@ -135,17 +135,16 @@ const ChatPage = () => {
 
     async function loadDynamicTurnServers() {
       try {
-        // Dynamically fetch active, fully-working and non-blocked session TURN credentials
-        const res = await fetch("https://openrelay.metered.ca/api/v1/turn/credentials");
-        if (res.ok) {
-          const dynamicConfig = await res.json();
-          if (Array.isArray(dynamicConfig) && dynamicConfig.length > 0) {
-            iceServersRef.current = dynamicConfig;
-            console.log("Dynamic OpenRelay TURN cluster integrated.");
-          }
+        // Proxied fetch via Backend Endpoint with integrated Server DNS Domain-to-IP resolution.
+        // This completely bypasses client ISP-level blocks to openrelay.metered.ca!
+        const res = await httpClient.get("/api/v1/rooms/ice-servers");
+        const dynamicConfig = res.data;
+        if (Array.isArray(dynamicConfig) && dynamicConfig.length > 0) {
+          iceServersRef.current = dynamicConfig;
+          console.log("Dynamic DNS-Resolved OpenRelay TURN cluster integrated successfully.");
         }
       } catch (err) {
-        console.warn("Unable to load dynamic TURN cluster, using Google STUN fallback.", err);
+        console.warn("Unable to load dynamic TURN cluster from backend, using Google STUN fallback.", err);
       }
     }
 
