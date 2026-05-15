@@ -294,17 +294,19 @@ const ChatPage = () => {
             return;
           }
 
-          if (newMessage.type === "JOIN") {
+          if (newMessage.type === "JOIN" || newMessage.type === "DISCOVER") {
             setOnlineUsers((prev) => {
               if (prev.some((u) => u.name === newMessage.user)) return prev;
               return [...prev, { name: newMessage.user, avatar: newMessage.avatar }];
             });
             
-            // Handshake Discovery: If someone else joined, echo my presence so they discover me!
-            if (newMessage.user !== currentUser) {
+            // Handshake Discovery: Break the infinite network-loop feedback cycle!
+            // We only respond to new 'JOIN' announcements, replying with a static 'DISCOVER' token 
+            // which tells the peer we exist but prevents them from re-acknowledging back to us.
+            if (newMessage.type === "JOIN" && newMessage.user !== currentUser) {
               client.publish({
                 destination: `/app/userPresence/${roomId}`,
-                body: JSON.stringify({ user: currentUser, type: "JOIN", avatar: currentUserAvatar }),
+                body: JSON.stringify({ user: currentUser, type: "DISCOVER", avatar: currentUserAvatar }),
               });
             }
             return;
