@@ -707,17 +707,18 @@ const ChatPage = () => {
     callPeerConnectionRef.current = pc;
 
     pc.ontrack = (event) => {
-      setRemoteStream((prev) => {
-        if (prev) {
-          // Append track directly to existing stream object
-          if (!prev.getTracks().find((t) => t.id === event.track.id)) {
+      // Use the browser's native stream directly. Wrapping in new MediaStream() breaks hardware decoding on some browsers!
+      if (event.streams && event.streams[0]) {
+        setRemoteStream(event.streams[0]);
+      } else {
+        setRemoteStream((prev) => {
+          if (prev) {
             prev.addTrack(event.track);
+            return prev; // Return same reference; native HTML5 video updates automatically
           }
-          // Create a new wrapper so React detects the state change and re-binds srcObject to include the Video track!
-          return new MediaStream(prev.getTracks());
-        }
-        return event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
-      });
+          return new MediaStream([event.track]);
+        });
+      }
     };
 
     pc.onicecandidate = (event) => {
@@ -801,17 +802,17 @@ const ChatPage = () => {
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
     pc.ontrack = (event) => {
-      setRemoteStream((prev) => {
-        if (prev) {
-          // Append track directly to existing stream object
-          if (!prev.getTracks().find((t) => t.id === event.track.id)) {
+      if (event.streams && event.streams[0]) {
+        setRemoteStream(event.streams[0]);
+      } else {
+        setRemoteStream((prev) => {
+          if (prev) {
             prev.addTrack(event.track);
+            return prev;
           }
-          // Create a new wrapper so React detects the state change and re-binds srcObject to include the Video track!
-          return new MediaStream(prev.getTracks());
-        }
-        return event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
-      });
+          return new MediaStream([event.track]);
+        });
+      }
     };
 
     pc.onicecandidate = (event) => {
